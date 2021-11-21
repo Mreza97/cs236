@@ -1,4 +1,7 @@
 
+import os
+import json
+import dataclasses
 from datetime import datetime
 from maestrodata import *
 from mtransformer import *
@@ -13,26 +16,45 @@ def main(args):
     maestro_config.max_target_length = 800
     maestro_data = MaestroData(maestro_config, random_state=random_state)
 
-    train_data = MaestroDataset(maestro_data, batch_size=1, max_size=1, train=True, fixed_sample=False)
-    valid_data = MaestroDataset(maestro_data, batch_size=1, max_size=1, validation=True, fixed_sample=False)
+    train_data = MaestroDataset(maestro_data, batch_size=1, max_size=None, train=True, fixed_sample=False)
+    valid_data = MaestroDataset(maestro_data, batch_size=1, max_size=None, validation=True, fixed_sample=False)
+
+    print(f"#records in training set: {len(train_data.records)}")
+    print(f"#records in validation set: {len(valid_data.records)}")
+
+    configuration = {
+            'args' : vars(args),
+            'dataset' : dataclasses.asdict(maestro_config),
+            'other' : {
+                '#records in training set': len(train_data.records),
+                '#records in validation set': len(valid_data.records)
+            }
+    }
 
     workers = min(os.cpu_count(), 40)
     train_generator = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=workers)
     valid_generator = torch.utils.data.DataLoader(valid_data, batch_size=args.batch_size, num_workers=workers)
 
-    dtstamp = datetime.now().strftime('%Y.%m.%d.%H.%M')
-    experiment = f'experiment1_{dtstamp}'
+    dtstamp = datetime.now().strftime('%Y.%m.%d-%H.%M')
+    experiment = f'experiment1/{dtstamp}'
     checkpoint_dir = f'./checkpoint/{experiment}'
     checkpoint_name = 'epoch_{epoch}_loss-{training_loss_epoch:.1e}'
-    logger_dir = f'logs/{experiment}'
+    logger_dir = f'./logs/{experiment}'
+    other_dir = f'./experiments/{experiment}'
+    config_log_file = f'{other_dir}/config.json'
 
-    checkpoint_callback = ModelCheckpoint(dirpath=checkpoint_dir, save_weights_only=False, every_n_epochs=100, filename=checkpoint_name)
+    os.makedirs(other_dir)
+    with open(config_log_file, "w") as text_file:
+        text_file.write(json.dumps(configuration, indent=4))
+
+    checkpoint_callback = ModelCheckpoint(dirpath=checkpoint_dir, save_weights_only=False, every_n_epochs=10, filename=checkpoint_name)
     logger = TensorBoardLogger(logger_dir, name="default", flush_secs=5)
 
     model = Model(maestro_config)
 
-    trainer = Trainer(log_every_n_steps=50, max_epochs=args.epochs, devices=1, accelerator="gpu",
-                      default_root_dir="/content/runs", logger=logger,
+    trainer = Trainer(log_every_n_steps=min(len(train_generator),50),
+                      max_epochs=args.epochs, devices=1, accelerator="gpu",
+                      default_root_dir="./", logger=logger,
                       callbacks=[checkpoint_callback], enable_progress_bar=args.pbar)
 
     trainer.fit(model, train_generator, val_dataloaders=(valid_generator if args.validate else None))
