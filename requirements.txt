@@ -1,0 +1,5 @@
+pytorch-lightning
+transformers
+sentencepiece
+tensorflow-text
+music21>=7.1.0
