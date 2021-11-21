@@ -3,3 +3,5 @@ transformers
 sentencepiece
 tensorflow-text
 music21>=7.1.0
+librosa
+torch_edit_distance

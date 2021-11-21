@@ -16,7 +16,7 @@ import os
 
 @dataclass
 class MaestroDataConfig:
-    root_dir: str = '/content/data/maestro-v3.0.0'
+    root_dir: str = './maestro-v3.0.0'
     meta_csv: str = 'maestro-v3.0.0.csv'
     seed: int = None
     subset: float = 1
@@ -24,7 +24,7 @@ class MaestroDataConfig:
     midi_ticks_per_sec = 960
     midi_beats_per_min = 120
     midi_ticks_per_beat = midi_ticks_per_sec * 60 // midi_beats_per_min
-    sec_per_sample = [ 2, 5 ]
+    sec_per_sample = [ 1, 3 ]
     sr = 44100
     n_fft = 2048
     hop_length = 1024               # sr / hop_length = resolution (MFCCs per sec,) 43
@@ -63,7 +63,8 @@ class MaestroData:
         records = self.df[self.df.split.isin(filter)]
         return records
     def load_wav(self, dr, offset_sec=0, duration_sec=None):
-        wavfile = f"{self.config.root_dir}/{dr.audio_filename}"
+        #wavfile = f"{self.config.root_dir}/{dr.audio_filename}"
+        wavfile = f"{dr.audio_filename}"
         return self.load_wav_from_file(wavfile, offset_sec, duration_sec)
     def load_wav_from_file(self, wavfile, offset_sec=0, duration_sec=None):
         fpath = os.path.join(self.config.root_dir, wavfile)
@@ -325,8 +326,8 @@ class MaestroDatasetConfig(MaestroDataConfig):
 
 class MaestroDataset(torch.utils.data.Dataset):
 
-    def __init__(self, data, batch_size=5, max_size=None, train=False, test=False, validation=False, config=MaestroDatasetConfig(), fixed_sample=False, include_meta_data=False):
-        self.config = config
+    def __init__(self, data, batch_size=5, max_size=None, train=False, test=False, validation=False, fixed_sample=False, include_meta_data=False):
+        self.config = data.config
         self.batch_size = batch_size
         self.data = data
         self.max_size = max_size
@@ -358,7 +359,8 @@ class MaestroDataset(torch.utils.data.Dataset):
         #maybe this is not required for EOS ??? (nov20)
         #
         mask[:len(tokens)+1] = self.config.mask_id
-        return {'target_id':target, 'label':labels, 'attention_mask':mask}
+        r = {'target_id':target, 'label':labels, 'attention_mask':mask}
+        return r
 
     def __getitem__(self, idx):
         if idx >= len(self):

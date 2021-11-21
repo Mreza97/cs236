@@ -33,7 +33,7 @@ def main(args):
 
     trainer = Trainer(log_every_n_steps=50, max_epochs=args.epochs, devices=1, accelerator="gpu",
                       default_root_dir="/content/runs", logger=logger,
-                      callbacks=[checkpoint_callback], enable_progress_bar=True)
+                      callbacks=[checkpoint_callback], enable_progress_bar=args.pbar)
 
     trainer.fit(model, train_generator, val_dataloaders=(valid_generator if args.validate else None))
 
@@ -44,6 +44,9 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=2021)
     parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--pbar', dest='pbar', action='store_true')
+    parser.add_argument('--no-pbar', dest='pbar', action='store_false')
+    parser.set_defaults(pbar=True)
     parser.add_argument('--validate', dest='validate', action='store_true')
     parser.add_argument('--no-validate', dest='validate', action='store_false')
     parser.set_defaults(validate=True)
