@@ -47,7 +47,7 @@ def main(args):
     with open(config_log_file, "w") as text_file:
         text_file.write(json.dumps(configuration, indent=4))
 
-    checkpoint_callback = ModelCheckpoint(dirpath=checkpoint_dir, save_weights_only=False, every_n_epochs=10, filename=checkpoint_name)
+    checkpoint_callback = ModelCheckpoint(dirpath=checkpoint_dir, save_weights_only=False, every_n_epochs=200, filename=checkpoint_name)
     logger = TensorBoardLogger(logger_dir, name="default", flush_secs=5)
 
     model = Model(maestro_config)
@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Create a ArcHydro schema')
     parser.add_argument('--seed', type=int, default=2021)
-    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=1200)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--pbar', dest='pbar', action='store_true')
     parser.add_argument('--no-pbar', dest='pbar', action='store_false')
