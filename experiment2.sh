@@ -10,6 +10,6 @@ date: $(date)
 
 "
 
-python3 experiment2.py
-sudo /sbin/shutdown -h now
+python3 experiment2.py 
+#sudo /sbin/shutdown -h now
 

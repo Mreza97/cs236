@@ -47,10 +47,16 @@ def main(args):
     with open(config_log_file, "w") as text_file:
         text_file.write(json.dumps(configuration, indent=4))
 
-    checkpoint_callback = ModelCheckpoint(dirpath=checkpoint_dir, save_weights_only=False, every_n_epochs=200, filename=checkpoint_name)
+    os.makedirs(checkpoint_dir)
+    checkpoint_callback = ModelCheckpoint(dirpath=checkpoint_dir, save_weights_only=False,
+        every_n_epochs=args.checkpoint_every_n_epoch, filename=checkpoint_name,
+        save_top_k=args.save_top_k)
     logger = TensorBoardLogger(logger_dir, name="default", flush_secs=5)
 
-    model = Model(maestro_config)
+    if args.checkpoint is None:
+        model = Model(maestro_config)
+    else:
+        model = Model.load_from_checkpoint(args.checkpoint)
 
     trainer = Trainer(log_every_n_steps=min(len(train_generator),50),
                       max_epochs=args.epochs, devices=1, accelerator="gpu",
@@ -64,14 +70,21 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Create a ArcHydro schema')
     parser.add_argument('--seed', type=int, default=2021)
-    parser.add_argument('--epochs', type=int, default=1200)
+    parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=10)
+    parser.add_argument('--checkpoint_every_n_epoch', type=int, default=5)
+    parser.add_argument('--save_top_k', type=int, default=-1)
+    parser.add_argument('--checkpointsave_top_k', type=int, default=-1)
+    parser.add_argument('--checkpoint', type=pathlib.Path)
     parser.add_argument('--pbar', dest='pbar', action='store_true')
     parser.add_argument('--no-pbar', dest='pbar', action='store_false')
     parser.set_defaults(pbar=True)
     parser.add_argument('--validate', dest='validate', action='store_true')
     parser.add_argument('--no-validate', dest='validate', action='store_false')
     parser.set_defaults(validate=True)
+
     args = parser.parse_args()
+    if not args.checkpoint is None and not ( args.checkpoint.exists() and args.checkpoint.is_file() )
+        throw new FileNotFoundError(f'missing checkpoint file, {args.checkpoint}')
     main(args)
 
