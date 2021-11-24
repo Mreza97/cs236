@@ -4,3 +4,5 @@ __pycache__
 experiments
 logs
 maestro-v3.0.0
+checkpoint
+lightning_logs

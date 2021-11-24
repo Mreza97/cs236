@@ -1,6 +1,7 @@
 
 import os
 import json
+import pathlib
 import dataclasses
 from datetime import datetime
 from maestrodata import *
@@ -38,7 +39,7 @@ def main(args):
     dtstamp = datetime.now().strftime('%Y.%m.%d-%H.%M')
     experiment = f'experiment2/{dtstamp}'
     checkpoint_dir = f'./checkpoint/{experiment}'
-    checkpoint_name = 'epoch_{epoch}_loss-{training_loss_epoch:.1e}'
+    checkpoint_name = '{epoch}_{training_loss_epoch:.1e}'
     logger_dir = f'./logs/{experiment}'
     other_dir = f'./experiments/{experiment}'
     config_log_file = f'{other_dir}/config.json'
@@ -56,7 +57,8 @@ def main(args):
     if args.checkpoint is None:
         model = Model(maestro_config)
     else:
-        model = Model.load_from_checkpoint(args.checkpoint)
+        model = Model.load_from_checkpoint(args.checkpoint, config=maestro_config)
+        print(f'restored model from {args.checkpoint}')
 
     trainer = Trainer(log_every_n_steps=min(len(train_generator),50),
                       max_epochs=args.epochs, devices=1, accelerator="gpu",
@@ -71,11 +73,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Create a ArcHydro schema')
     parser.add_argument('--seed', type=int, default=2021)
     parser.add_argument('--epochs', type=int, default=200)
-    parser.add_argument('--batch_size', type=int, default=10)
-    parser.add_argument('--checkpoint_every_n_epoch', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=12)
+    parser.add_argument('--checkpoint_every_n_epoch', type=int, default=10)
     parser.add_argument('--save_top_k', type=int, default=-1)
-    parser.add_argument('--checkpointsave_top_k', type=int, default=-1)
-    parser.add_argument('--checkpoint', type=pathlib.Path)
+    parser.add_argument('--checkpoint', type=str)
     parser.add_argument('--pbar', dest='pbar', action='store_true')
     parser.add_argument('--no-pbar', dest='pbar', action='store_false')
     parser.set_defaults(pbar=True)
@@ -84,7 +85,7 @@ if __name__ == '__main__':
     parser.set_defaults(validate=True)
 
     args = parser.parse_args()
-    if not args.checkpoint is None and not ( args.checkpoint.exists() and args.checkpoint.is_file() )
-        throw new FileNotFoundError(f'missing checkpoint file, {args.checkpoint}')
+    if not args.checkpoint is None and not ( os.path.exists(args.checkpoint) and os.path.isfile(args.checkpoint) ):
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), args.checkpoint)
     main(args)
 
