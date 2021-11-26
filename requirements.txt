@@ -5,4 +5,5 @@ sentencepiece
 tensorflow-text
 music21>=7.1.0
 librosa
+midi2audio
 torch_edit_distance
