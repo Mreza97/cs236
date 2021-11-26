@@ -33,8 +33,10 @@ def main(args):
     }
 
     workers = min(os.cpu_count(), 40)
-    train_generator = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=workers)
-    valid_generator = torch.utils.data.DataLoader(valid_data, batch_size=args.batch_size, num_workers=workers)
+    train_generator = torch.utils.data.DataLoader(train_data, worker_init_fn=train_data.worker_init_fn,
+            batch_size=args.batch_size, num_workers=workers)
+    valid_generator = torch.utils.data.DataLoader(valid_data, worker_init_fn=valid_data.worker_init_fn,
+            batch_size=args.batch_size, num_workers=workers)
 
     dtstamp = datetime.now().strftime('%Y.%m.%d-%H.%M')
     experiment = f'experiment3/{dtstamp}'
