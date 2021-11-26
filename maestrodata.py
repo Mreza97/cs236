@@ -52,13 +52,20 @@ class MaestroData:
 
     def __init__(self, config=MaestroDataConfig(), random_state=None):
         self.config = config
-        self.random_state = np.random.RandomState(seed=self.config.seed) if random_state is None else random_state
+        self.random_state_init = random_state
+        self.init_random_state(reset=True)
         self.df = pd.read_csv(f"{self.config.root_dir}/{self.config.meta_csv}")
         self.df = self.df.sample(frac=1, random_state=self.random_state)
         if self.config.subset != 1.0:
             self.df = self.df.groupby(['year','split'], as_index=False).apply(lambda g: g.sample((int)(self.config.subset*len(g)), random_state=self.random_state))
         if self.config.years:
             self.df = self.df[self.df.year.isin(self.config.years)]
+    def init_random_state(self, reset=False):
+        if reset:
+            self.random_state = np.random.RandomState(seed=self.config.seed) if self.random_state_init is None else self.random_state_init
+        else:
+            # torch generator is properly seeded in child processes
+            self.random_state = np.random.RandomState(torch.randint(0, 2**32-1, (1,)).item()) # use torch.initial_seed() ...
     def get_data(self, train=False, test=False, validation=False):
         dataset = np.array([train, test, validation]) != 0
         filter = np.array(['train', 'test', 'validation'])[dataset]
@@ -358,6 +365,12 @@ class MaestroDataset(torch.utils.data.Dataset):
         if self.fixed_sample:
             warnings.warn(f"Using {len(self.records)} fixed sample(s)")
             self.samples = []
+
+    def init_random_state(self):
+        self.data.init_random_state(reset=self.fixed_sample)
+
+    def worker_init_fn(self, worker_id):
+        self.init_random_state()
 
     def pad(self, tokens):
         if len(tokens) >= self.config.max_target_length-2:
