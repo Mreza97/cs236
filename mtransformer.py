@@ -54,8 +54,9 @@ class LevenshteinMetric(tm.Metric):
 
 
 class Model(LightningModule):
-    def __init__(self, config):
+    def __init__(self, config, **params):
         self.config = config
+        self.params = params
         super().__init__()
         self.t5 = T5Model.from_pretrained("t5-small")
         # do we want linear without bias here? why not with activation.
@@ -164,9 +165,11 @@ class Model(LightningModule):
 
     #https://discuss.huggingface.co/t/t5-finetuning-tips/684/4
     def configure_optimizers(self):
+        lr = self.params['lr'] if 'lr' in self.params else 1e-3
+
         return Adafactor(
             self.parameters(),
-            lr=1e-3, #1e-3 ... 1e-4
+            lr=lr, #1e-3 ... 1e-4
             eps=(1e-30, 1e-3),
             clip_threshold=1.0,
             decay_rate=-0.8,

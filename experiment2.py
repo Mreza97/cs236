@@ -59,6 +59,9 @@ def main(args):
     else:
         model = Model.load_from_checkpoint(args.checkpoint, config=maestro_config)
         print(f'restored model from {args.checkpoint}')
+    if not args.lr is None:
+        model.params['lr'] = args.lr
+        print(f"updating learning rate to {model.params['lr']}")
 
     trainer = Trainer(log_every_n_steps=min(len(train_generator),50),
                       max_epochs=args.epochs, devices=1, accelerator="gpu",
@@ -74,6 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=2021)
     parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=12)
+    parser.add_argument('--lr', type=float)
     parser.add_argument('--checkpoint_every_n_epoch', type=int, default=10)
     parser.add_argument('--save_top_k', type=int, default=-1)
     parser.add_argument('--checkpoint', type=str)

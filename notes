@@ -1,3 +1,5 @@
 
 - experiment2 currently uses only 9742mb of memory ... can use more
+- change validation such that the ground truth and projected sequence is saved, then work on metrics using data set
+- could find nearest tone for each tone.
 
