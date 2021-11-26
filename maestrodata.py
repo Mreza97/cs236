@@ -8,6 +8,8 @@ import warnings
 import torch
 import math
 import os
+import tempfile
+from midi2audio import FluidSynth
 
 # Alright, time to wrap this up....
 
@@ -82,6 +84,12 @@ class MaestroData:
         self.create_midi_file(events, fname, remaining_ticks)
 
     def create_midi_file(self, events, fname, remaining_ticks=0):
+        sf = self.create_midi(events, remaining_ticks=remaining_ticks)
+        sf.open(fname, 'wb')
+        sf.write()
+        sf.close()
+
+    def create_midi(self, events, remaining_ticks=0):
         events = list(events)
         events.insert(0, m21.midi.DeltaTime(track=None, time=0, channel=1))
         events.insert(1, m21.midi.MidiEvent(track=None, type=m21.midi.ChannelVoiceMessages.PROGRAM_CHANGE, channel=1))
@@ -99,10 +107,21 @@ class MaestroData:
         sf.tracks[0].events = events
         sf.tracks[0].updateEvents()
         sf.tracks[0].setChannel(1)
+ 
+        return sf
+ 
+    def events2wav(self, events):
 
-        sf.open(fname, 'wb')
-        sf.write()
-        sf.close()
+        midiFile = tempfile.mkstemp(suffix='.midi')[1]
+        wavFile = tempfile.mkstemp(suffix='.wav')[1]
+        try:
+            mf = self.create_midi_file(maestro_data.unmap_events(events), fname=midiFile)
+            FluidSynth("/usr/share/sounds/sf2/FluidR3_GM.sf2").midi_to_audio(midiFile, wavFile)
+            y, sr = librosa.load(wavFile, sr=self.config.sr, mono=True)
+            return y,sr
+        finally:
+            os.remove(wavFile)
+            os.remove(midiFile)
 
     def load_midi_events(self, dr, offset_ticks=0, duration_ticks=None):
         midifile = f"{self.config.root_dir}/{dr.midi_filename}"

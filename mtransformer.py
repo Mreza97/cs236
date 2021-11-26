@@ -120,7 +120,7 @@ class Model(LightningModule):
             self.log("levenshtein_glen", last_value[:, 3].mean(), on_step=True, on_epoch=False)
         return dist
 
-    def generate(self, x, batch_idx, use_cache=True, tqdm=None):
+    def generate(self, x, batch_idx, use_cache=True, tqdm=None, stop_at_eos=True):
         input_ids = x['mfcc']
         inputs_embeds = self.encoder_input(input_ids)
         batch_size = input_ids.shape[0]
@@ -140,6 +140,7 @@ class Model(LightningModule):
         r = range(1, self.config.max_target_length)
         if tqdm: r = tqdm(r, total=self.config.max_target_length-1)
         for target_seq_length in r:
+            torch.cuda.empty_cache() 
             ret = self.t5(inputs_embeds=inputs_embeds,
                           decoder_attention_mask=attention_mask if (past_key_values is None or not use_cache) else None,
                           decoder_input_ids=target_ids if (past_key_values is None or not use_cache) else last_target_ids,
@@ -157,7 +158,7 @@ class Model(LightningModule):
             #predictions[:, target_seq_length] = lm_logits[:, target_dim, next_target_ids]
             last_target_ids[:, 0] = next_target_ids
             attention_mask[:, target_seq_length] = self.config.mask_id
-            if completed == batch_size: break
+            if completed == batch_size and stop_at_eos: break
 
         target_ids[:, 0:-1] = target_ids[:, 1:].clone()
         target_ids[: -1] = self.config.label_padding_id
