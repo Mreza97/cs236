@@ -157,6 +157,7 @@ class Model(LightningModule):
             #predictions[:, target_seq_length] = lm_logits[:, target_dim, next_target_ids]
             last_target_ids[:, 0] = next_target_ids
             attention_mask[:, target_seq_length] = self.config.mask_id
+            if completed == batch_size: break
 
         target_ids[:, 0:-1] = target_ids[:, 1:].clone()
         target_ids[: -1] = self.config.label_padding_id
