@@ -122,7 +122,7 @@ class MaestroData:
         midiFile = tempfile.mkstemp(suffix='.midi')[1]
         wavFile = tempfile.mkstemp(suffix='.wav')[1]
         try:
-            mf = self.create_midi_file(maestro_data.unmap_events(events), fname=midiFile)
+            mf = self.create_midi_file(self.unmap_events(events), fname=midiFile)
             FluidSynth("/usr/share/sounds/sf2/FluidR3_GM.sf2").midi_to_audio(midiFile, wavFile)
             y, sr = librosa.load(wavFile, sr=self.config.sr, mono=True)
             return y,sr
@@ -426,8 +426,8 @@ class MaestroDataset(torch.utils.data.Dataset):
                 'attention_mask' : np.stack([ _['attention_mask'] for _ in midi ]),
             }
         if self.include_meta_data:
-            data['midi'] = actual_midi
-            data['sample'] = sample
+            #data['midi'] = actual_midi
+            data['sample'] = idx, sample
         data['mfcc'] = torch.tensor(data['mfcc'], dtype=torch.float32)
         data['target_id'] = torch.tensor(data['target_id'], dtype=torch.int64)
         data['label'] = torch.tensor(data['label'], dtype=torch.int64)
