@@ -13,7 +13,7 @@ def main(args):
     maestro_config = MaestroDatasetConfig()
     maestro_config.years = None
     maestro_config.sec_per_sample = [1, 3]
-    maestro_config.max_source_length = 129
+    maestro_config.max_source_length = 130
     maestro_config.max_target_length = 800
     maestro_data = MaestroData(maestro_config, random_state=random_state)
 
