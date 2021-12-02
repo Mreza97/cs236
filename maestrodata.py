@@ -406,7 +406,11 @@ class MaestroDataset(torch.utils.data.Dataset):
         end = min((idx+1) * self.batch_size, len(self.records))
         x = [ self.data.load_sample(self.records.iloc[idx], *sample) for idx in range(start, end) ]
         mfcc = [ _[0] for _ in x ]
-        mfcc = [ np.pad(_, ((0,(self.config.max_source_length-_.shape[0])),(0,0)), mode='constant', constant_values=self.config.mfcc_pad_value) for _ in mfcc ]
+        maxlen = max([ _.shape[0] for _ in mfcc])
+        if maxlen > self.config.max_source_length:
+            warnings.warn(f"source sequence too long, {maxlen} > {self.config.max_source_length}")
+        mfcc = [ np.pad(_[:self.config.max_source_length],
+            ((0,max(0,(self.config.max_source_length-_.shape[0]))),(0,0)), mode='constant', constant_values=self.config.mfcc_pad_value) for _ in mfcc ]
         midi = [ self.pad( _[1].event_id ) for _ in x ]
         if self.include_meta_data:
             actual_midi = [ _[2] for _ in x ]
