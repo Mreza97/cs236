@@ -112,12 +112,12 @@ class NoteCountMSE(tm.Metric):
 
 class Model(LightningModule):
     def __init__(self, config, **params):
+        super().__init__()
         self.config = config
         self.params = params
         self.metrics = ['duration_ms_mse', 'note_count_mse']
         self.duration_ms_mse = DurationMSE(self.config)
         self.note_count_mse = NoteCountMSE(self.config)
-        super().__init__()
         self.t5 = T5Model.from_pretrained("t5-small")
         # do we want linear without bias here? why not with activation.
         #self.lm_head = torch.nn.Linear(self.t5.config.d_model, self.t5.config.vocab_size, bias=False)
