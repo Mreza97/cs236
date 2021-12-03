@@ -52,11 +52,71 @@ class LevenshteinMetric(tm.Metric):
     def compute(self):
         return self.d.float() / self.total
 
+import torchmetrics as tm
+
+class DurationMSE(tm.Metric):
+    def __init__(self, config, dist_sync_on_step=False):
+        super().__init__(dist_sync_on_step=dist_sync_on_step)
+        self.config = config
+        self.add_state("duration_mse", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("count", default=torch.tensor(0.0), dist_reduce_fx="sum")
+
+    def time_steps(self, x):
+        where = (x >= self.config.time_event_min) & (x <= self.config.time_event_max)
+        time_steps = torch.where(where,
+                                 (x-self.config.time_event_min)*x.new_full((1,), 10, dtype=torch.float),
+                                 x.new_full((1,), 0, dtype=torch.float)) # in msec
+        return time_steps
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        preds_time = self.time_steps(preds).sum(1)
+        target_time = self.time_steps(target).sum(1)
+        mse = torch.norm((preds_time - target_time), p=2, dim=0).sum(0)
+        self.duration_mse += mse
+        self.count += preds.shape[0]
+
+    def compute(self):
+        return self.duration_mse / self.count
+
+import scipy
+
+class NoteCountMSE(tm.Metric):
+    def __init__(self, config, dist_sync_on_step=False):
+        super().__init__(dist_sync_on_step=dist_sync_on_step)
+        self.config = config
+        self.add_state("note_count_mse", default=torch.tensor(0.0, dtype=torch.float64), dist_reduce_fx="sum")
+        self.add_state("count", default=torch.tensor(0.0, dtype=torch.float64), dist_reduce_fx="sum")
+
+    def notes_row(self, x, counts):
+        for v,c in zip(*np.unique(x, return_counts=True)):
+            if v>=self.config.pitch_event_min and v<=self.config.pitch_event_max:
+                counts[v - self.config.pitch_event_min] = c
+
+    def notes(self, x):
+        x = x.cpu().numpy().astype(np.int32)
+        count = np.zeros((x.shape[0], self.config.pitch_event_max-self.config.pitch_event_min+1), dtype=np.int32)
+        for i in range(x.shape[0]):
+            self.notes_row(x[i], count[i])
+        return count
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        batch_sz = preds.shape[0]
+        p = self.notes(preds)
+        t = self.notes(target)
+        self.note_count_mse += np.linalg.norm(p-t, ord=2, axis=1).sum(0)
+        self.count += batch_sz
+
+    def compute(self):
+        return self.note_count_mse / self.count
+
 
 class Model(LightningModule):
     def __init__(self, config, **params):
         self.config = config
         self.params = params
+        self.metrics = ['duration_ms_mse', 'note_count_mse']
+        self.duration_ms_mse = DurationMSE(self.config)
+        self.note_count_mse = NoteCountMSE(self.config)
         super().__init__()
         self.t5 = T5Model.from_pretrained("t5-small")
         # do we want linear without bias here? why not with activation.
@@ -83,7 +143,16 @@ class Model(LightningModule):
 
     def training_step(self, x, batch_idx):
         lm_logits = self(x)
-        loss = self.criterion(lm_logits.view(-1, lm_logits.size(-1)), x['label'].view(-1))
+        preds = lm_logits.view(-1, lm_logits.size(-1))
+        target = x['label'].view(-1)
+        #print("PREDS", preds.dtype, preds.shape, preds)
+        #print("TARGET", target.dtype, target.shape, target.view(-1))
+        #
+        # loss here is CE loss between class probabilities (float32) and target (int64)
+        #    pred dimensions [batch, max_target_length+1, vocab_size]
+        #    target dimensions [ batch ]
+        #
+        loss = self.criterion(preds, target)
         #self.log("training_loss", loss, on_step=False, on_epoch=True)
         return loss
 
@@ -99,26 +168,31 @@ class Model(LightningModule):
     #    return loss
 
     def validation_step(self, x, batch_idx):
-        #print("validation_step")
-        myself = self
-        criterion = self.criterion
-        lm_logits = myself.generate(x, batch_idx)
-        input = lm_logits.view(-1, lm_logits.size(-1))
+        lm_logits = self.generate(x, batch_idx)
+        preds = lm_logits.view(-1, lm_logits.size(-1))
         target = x['label']#.view(-1)
-        #print(f"criterion({input.shape}/{input.dtype}/{input.device}, {target.shape}/{target.dtype}/{target.device})")
-        #loss = criterion(input, target)
-        #self.log("validation_loss", loss, on_step=False, on_epoch=True)
-        dist = None
         if self.levenshtein:
-            self.levenshtein.update(input, target)
-            dist = self.levenshtein.compute()
-            self.log("levenshtein", dist, on_step=False, on_epoch=True)
-            last_value = self.levenshtein.last_value.to(torch.float)
-            self.log("levenshtein_del", last_value[:, 0].mean(), on_step=True, on_epoch=False)
-            self.log("levenshtein_ins", last_value[:, 1].mean(), on_step=True, on_epoch=False)
-            self.log("levenshtein_sub", last_value[:, 2].mean(), on_step=True, on_epoch=False)
-            self.log("levenshtein_glen", last_value[:, 3].mean(), on_step=True, on_epoch=False)
-        return dist
+            self.levenshtein(preds, target)
+            self.log('levenshtein', self.levenshtein, on_step=True, on_epoch=True)
+        for k in self.metrics:
+            m = getattr(self, k)
+            m(preds, target)
+            print("LOGGING", k, m)
+            self.log(k, m, on_step=True, on_epoch=True)
+        return None
+
+    #def validation_step_end(self, step_output):
+    #    for k,m in self.metrics.items():
+    #        self.log(k, m.compute())
+    #    if self.levenshtein:
+    #        dist = self.levenshtein.compute()
+    #        self.log("levenshtein", dist, on_step=False, on_epoch=True)
+    #        last_value = self.levenshtein.last_value.to(torch.float)
+    #        self.log("levenshtein_del", last_value[:, 0].mean(), on_step=True, on_epoch=False)
+    #        self.log("levenshtein_ins", last_value[:, 1].mean(), on_step=True, on_epoch=False)
+    #        self.log("levenshtein_sub", last_value[:, 2].mean(), on_step=True, on_epoch=False)
+    #        self.log("levenshtein_glen", last_value[:, 3].mean(), on_step=True, on_epoch=False)
+    #    return None
 
     def generate(self, x, batch_idx, use_cache=True, tqdm=None, stop_at_eos=True):
         input_ids = x['mfcc']

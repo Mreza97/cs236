@@ -79,13 +79,13 @@ class MaestroData:
         fpath = os.path.join(self.config.root_dir, wavfile)
         y, sr = librosa.load(fpath, sr=self.config.sr, mono=True, offset=offset_sec, duration=duration_sec)
         return y, sr
-    def load_mfccs(self, dr, offset_sec=0, duration_sec=None):
+    def load_mfccs(self, dr, offset_sec=0, duration_sec=None, include_y=False):
         #wavfile = f"{self.config.root_dir}/{dr.audio_filename}"
         #y, sr = librosa.load(wavfile, sr=self.config.sr, mono=True, offset=offset_sec, duration=duration_sec)
         y, sr = self.load_wav(dr, offset_sec, duration_sec)
         mel_spect = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=self.config.n_fft, hop_length=self.config.hop_length, win_length=self.config.win_length, n_mels=self.config.n_mels, power=self.config.power)
         #mel_spect = librosa.power_to_db(spect, ref=np.max) - should be included with power=2 above ...
-        return mel_spect.T
+        return mel_spect.T, y if include_y else mel_spect.T
     def create_midi_file_from_sample(self, dr, fname, offset_ticks, duration_ticks):
         events, remaining_ticks = self.load_midi_events(dr, offset_ticks, duration_ticks)
         self.create_midi_file(events, fname, remaining_ticks)
@@ -303,8 +303,8 @@ class MaestroData:
         offset_sec = self.random_state.rand() * (dr.duration - duration_sec)
         return offset_sec, duration_sec
 
-    def load_sample(self, dr, offset_sec=0, duration_sec=None, load_mfcc=True, load_midi=True):
-        mfccs = self.load_mfccs(dr, offset_sec, duration_sec) if load_mfcc else None
+    def load_sample(self, dr, offset_sec=0, duration_sec=None, load_mfcc=True, load_midi=True, include_y=False):
+        mfccs, y = self.load_mfccs(dr, offset_sec, duration_sec, include_y=True) if load_mfcc else None
         if load_midi:
             midi_events = self.load_midi_events(dr, offset_sec*self.config.midi_ticks_per_sec,
                 None if duration_sec is None else duration_sec*self.config.midi_ticks_per_sec)
@@ -312,7 +312,9 @@ class MaestroData:
         else:
             events = None
             midi_events = None
-        return mfccs, events, midi_events, (dr.midi_filename, dr.audio_filename, offset_sec, duration_sec)
+        retval = mfccs, events, midi_events, (dr.midi_filename, dr.audio_filename, offset_sec, duration_sec)
+        if include_y: retval = retval + (y,)
+        return retval
 
     # returns the max sequence length (event count) given max sequence length (in seconds), excluding BOS and EOS
     def max_record_seq_length(self, events, sequence_len_sec=None):
@@ -404,7 +406,7 @@ class MaestroDataset(torch.utils.data.Dataset):
         else:
             sample = self.data.sample_record(self.records.iloc[idx])
         end = min((idx+1) * self.batch_size, len(self.records))
-        x = [ self.data.load_sample(self.records.iloc[idx], *sample) for idx in range(start, end) ]
+        x = [ self.data.load_sample(self.records.iloc[idx], *sample, include_y=True) for idx in range(start, end) ]
         mfcc = [ _[0] for _ in x ]
         maxlen = max([ _.shape[0] for _ in mfcc])
         if maxlen > self.config.max_source_length:
@@ -415,6 +417,7 @@ class MaestroDataset(torch.utils.data.Dataset):
         if self.include_meta_data:
             actual_midi = [ _[2] for _ in x ]
             sample = [ _[3] for _ in x ]
+            y = [ _[4] for _ in x ]
         if end == start + 1:
             data = {
                 'mfcc' : mfcc[0],
@@ -431,7 +434,7 @@ class MaestroDataset(torch.utils.data.Dataset):
             }
         if self.include_meta_data:
             #data['midi'] = actual_midi
-            data['sample'] = idx, sample
+            data['sample'] = idx, sample, y
         data['mfcc'] = torch.tensor(data['mfcc'], dtype=torch.float32)
         data['target_id'] = torch.tensor(data['target_id'], dtype=torch.int64)
         data['label'] = torch.tensor(data['label'], dtype=torch.int64)
