@@ -10,15 +10,15 @@ from mtransformer import *
 
 def main(args):
 
-    random_state = None #np.random.RandomState(args.seed)
+    random_state = np.random.RandomState(args.seed)
     maestro_config = MaestroDatasetConfig()
-    maestro_config.years = None
+    maestro_config.years = [ 2017 ]
     maestro_config.sec_per_sample = [1, 3]
     maestro_config.max_source_length = 130
     maestro_config.max_target_length = 800
     maestro_data = MaestroData(maestro_config, random_state=random_state)
 
-    valid_data = MaestroDataset(maestro_data, batch_size=1, max_size=None, validation=True, fixed_sample=False)
+    valid_data = MaestroDataset(maestro_data, batch_size=1, max_size=None, validation=True, fixed_sample=True)
 
     print(f"#records in validation set: {len(valid_data.records)}")
 
@@ -31,7 +31,9 @@ def main(args):
     }
 
     workers = min(os.cpu_count(), 20)
-    valid_generator = torch.utils.data.DataLoader(valid_data, worker_init_fn=valid_data.worker_init_fn,
+    valid_generator = torch.utils.data.DataLoader(valid_data,
+            # fixed sample
+            # worker_init_fn=valid_data.worker_init_fn,
             batch_size=args.batch_size, num_workers=workers)
 
     dtstamp = datetime.now().strftime('%Y.%m.%d-%H.%M')
@@ -77,12 +79,12 @@ def main(args):
     for epoch, checkpoint in checkpoints:
         model = Model.load_from_checkpoint(checkpoint, config=maestro_config)
         logger = TensorBoardLogger(logger_dir, name=f"epoch-{epoch:04d}", flush_secs=5)
-        trainer = Trainer(log_every_n_steps=min(len(train_generator), 50),
+        trainer = Trainer(log_every_n_steps=min(len(valid_generator), 50),
                           devices=1, accelerator="gpu",
                           default_root_dir="./", logger=logger,
                           enable_progress_bar=args.pbar)
-        #trainer.validate(model, val_dataloaders=valid_generator)
-        print(epoch, checkpoint)
+        print(f'EPOCH: {epoch} from {checkpoint}')
+        trainer.validate(model, val_dataloaders=valid_generator)
 
 if __name__ == '__main__':
     import argparse
