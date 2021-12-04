@@ -6,3 +6,7 @@ logs
 maestro-v3.0.0
 checkpoint
 lightning_logs
+*.tar
+*.tar.gz
+old/
+old_logs/
