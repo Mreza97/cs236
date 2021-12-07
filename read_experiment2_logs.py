@@ -40,7 +40,6 @@ for logfile in glob.glob("logs/experiment2/*/*/*/events.out*"):
                         'tag': tag,
                         'value': value
                         }, ignore_index=True)
-    break
 
 loss = df[df.tag=='training_loss_step'].rename(columns={'value':'training_loss_step'}).drop(columns='tag')
 epoch = df[df.tag=='epoch'].rename(columns={'value':'epoch'}).drop(columns='tag')
